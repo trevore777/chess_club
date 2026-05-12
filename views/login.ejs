@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html><head><title>Chess Club Login</title><link rel="stylesheet" href="/css/styles.css"></head><body>
+<main class="login-card">
+  <h1>Chess Club Login</h1>
+  <p>Students and coaches use the same login page.</p>
+  <% if (error) { %><div class="error"><%= error %></div><% } %>
+  <form method="POST" action="/login" class="form">
+    <input name="username" placeholder="Username" required>
+    <input name="password" type="password" placeholder="Password" required>
+    <button>Login</button>
+  </form>
+  <p class="hint"><strong>Demo:</strong> coach/password123 or sam/password123</p>
+</main>
+</body></html>

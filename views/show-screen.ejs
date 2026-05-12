@@ -1,0 +1,5 @@
+<!DOCTYPE html>
+<html><head><title>Chess Club Show Screen</title><link rel="stylesheet" href="/css/styles.css"><meta http-equiv="refresh" content="10"></head><body class="show-body">
+<main class="show-layout"><section class="show-screen"><h1>Chess Club Feature Game</h1><% if (featured) { %><p class="show-meta"><%= featured.competition_name %> · Round <%= featured.round_number %> · Board <%= featured.board_number %></p><div class="players"><div><span>White</span><strong><%= featured.white_name || 'BYE' %></strong></div><div class="vs">VS</div><div><span>Black</span><strong><%= featured.black_name || 'BYE' %></strong></div></div><p class="result">Result: <%= featured.result %></p><% if (board) { %><div id="board" class="chessboard display-board" data-fen="<%= board.fen %>"></div><% } %><% } else { %><p>No featured game selected yet.</p><% } %></section><aside class="show-leaderboard"><h2>Leaderboard</h2><ol><% leaderboard.slice(0, 8).forEach(p => { %><li><span><%= p.name %></span><strong><%= p.points %> pts</strong></li><% }) %></ol></aside></main>
+<script src="/js/board.js"></script>
+</body></html>

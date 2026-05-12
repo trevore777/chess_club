@@ -1,0 +1,7 @@
+<!DOCTYPE html>
+<html><head><title>Players</title><link rel="stylesheet" href="/css/styles.css"></head><body>
+<nav><strong>Chess Club</strong><a href="/coach">Coach</a><a href="/players">Players</a><a href="/leaderboard">Leaderboard</a><a href="/logout">Logout</a></nav>
+<main class="container"><section class="page-header"><h1>Players</h1><p>Add students and coaches. Student rankings are updated from match results.</p></section>
+<section class="card"><h2>Add Player</h2><% if (error) { %><div class="error"><%= error %></div><% } %><form method="POST" action="/players" class="form"><input name="name" placeholder="Full name" required><input name="username" placeholder="Username" required><input name="password" placeholder="Password" value="password123"><select name="role"><option value="student">Student</option><option value="coach">Coach</option></select><button>Add Player</button></form></section>
+<section class="card"><h2>Current Players</h2><table><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Points</th><th>W</th><th>D</th><th>L</th><th>Rating</th></tr></thead><tbody><% players.forEach(p => { %><tr><td><%= p.name %></td><td><%= p.username %></td><td><%= p.role %></td><td><%= p.points ?? '-' %></td><td><%= p.wins ?? '-' %></td><td><%= p.draws ?? '-' %></td><td><%= p.losses ?? '-' %></td><td><%= p.rating ?? '-' %></td></tr><% }) %></tbody></table></section>
+</main></body></html>
