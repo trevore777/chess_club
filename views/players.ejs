@@ -1,7 +1,97 @@
 <!DOCTYPE html>
-<html><head><title>Players</title><link rel="stylesheet" href="/css/styles.css"></head><body>
-<nav><strong>Chess Club</strong><a href="/coach">Coach</a><a href="/players">Players</a><a href="/leaderboard">Leaderboard</a><a href="/logout">Logout</a></nav>
-<main class="container"><section class="page-header"><h1>Players</h1><p>Add students and coaches. Student rankings are updated from match results.</p></section>
-<section class="card"><h2>Add Player</h2><% if (error) { %><div class="error"><%= error %></div><% } %><form method="POST" action="/players" class="form"><input name="name" placeholder="Full name" required><input name="username" placeholder="Username" required><input name="password" placeholder="Password" value="password123"><select name="role"><option value="student">Student</option><option value="coach">Coach</option></select><button>Add Player</button></form></section>
-<section class="card"><h2>Current Players</h2><table><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Points</th><th>W</th><th>D</th><th>L</th><th>Rating</th></tr></thead><tbody><% players.forEach(p => { %><tr><td><%= p.name %></td><td><%= p.username %></td><td><%= p.role %></td><td><%= p.points ?? '-' %></td><td><%= p.wins ?? '-' %></td><td><%= p.draws ?? '-' %></td><td><%= p.losses ?? '-' %></td><td><%= p.rating ?? '-' %></td></tr><% }) %></tbody></table></section>
-</main></body></html>
+<html>
+<head>
+  <title>Players</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<nav>
+  <strong>Chess Club</strong>
+  <a href="/coach">Coach</a>
+  <a href="/leaderboard">Leaderboard</a>
+  <a href="/logout">Logout</a>
+</nav>
+
+<main class="container">
+
+  <section class="page-header">
+    <h1>Players</h1>
+    <p>Add, import and rank chess club students.</p>
+  </section>
+
+  <section class="card">
+    <h2>Add Player</h2>
+
+    <form method="POST" action="/players" class="stack-form">
+      <input type="text" name="name" placeholder="Student name" required>
+      <input type="text" name="username" placeholder="Username" required>
+      <button type="submit">Add Player</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>CSV Import</h2>
+    <p class="small-muted">Paste one student per line:</p>
+
+    <pre>Name, username, rating
+John Smith, johnsmith, 1200
+Mary Jones, maryjones, 1250</pre>
+
+    <form method="POST" action="/players/import">
+      <textarea
+        name="csv"
+        rows="8"
+        style="width:100%; padding:14px; border-radius:10px; border:1px solid #cbd5e1;"
+        placeholder="John Smith, johnsmith, 1200"
+      ></textarea>
+
+      <br><br>
+      <button type="submit">Import Players</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Current Player Rankings</h2>
+
+    <% if (!players || !players.length) { %>
+      <p>No players added yet.</p>
+    <% } else { %>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Name</th>
+            <th>Username</th>
+            <th>Rating</th>
+            <th>Points</th>
+            <th>Wins</th>
+            <th>Draws</th>
+            <th>Losses</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <% players.forEach((player, index) => { %>
+            <tr>
+              <td><strong><%= index + 1 %></strong></td>
+              <td><%= player.name %></td>
+              <td><%= player.username %></td>
+              <td><%= player.rating || 1200 %></td>
+              <td><%= player.points || 0 %></td>
+              <td><%= player.wins || 0 %></td>
+              <td><%= player.draws || 0 %></td>
+              <td><%= player.losses || 0 %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+
+    <% } %>
+  </section>
+
+</main>
+
+</body>
+</html>

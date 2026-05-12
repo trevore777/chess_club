@@ -1,6 +1,0 @@
-<!DOCTYPE html>
-<html><head><title>Chess Club Leaderboard</title><link rel="stylesheet" href="/css/styles.css"></head><body>
-<nav><strong>Chess Club</strong><% if (currentUser && currentUser.role === 'coach') { %><a href="/coach">Coach</a><a href="/players">Players</a><% } else { %><a href="/student">Student</a><% } %><a href="/show" target="_blank">Show Screen</a><a href="/logout">Logout</a></nav>
-<main class="container"><section class="page-header"><h1>Chess Club Leaderboard</h1><p>Ranking is calculated from match results: win = 1 point, draw = 0.5 points, loss = 0 points.</p></section>
-<section class="card"><table><thead><tr><th>Rank</th><th>Student</th><th>Points</th><th>Wins</th><th>Draws</th><th>Losses</th><th>Rating</th></tr></thead><tbody><% leaderboard.forEach((p, i) => { %><tr><td><strong><%= i + 1 %></strong></td><td><%= p.name %></td><td><%= p.points %></td><td><%= p.wins %></td><td><%= p.draws %></td><td><%= p.losses %></td><td><%= p.rating %></td></tr><% }) %></tbody></table></section></main>
-</body></html>

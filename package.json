@@ -8,13 +8,15 @@
     "dev": "nodemon server.js",
     "db:init": "node scripts/init-db.js",
     "db:seed": "node scripts/seed-db.js",
-    "db:update-ranking-board": "node scripts/update-ranking-board.js"
+    "db:update-ranking-board": "node scripts/update-ranking-board.js",
+    "db:update-moves-board": "node scripts/update-moves-board.js"
   },
   "dependencies": {
-    "@libsql/client": "latest",
+    "@libsql/client": "^0.17.3",
     "bcryptjs": "latest",
+    "chess.js": "^1.4.0",
     "cookie-parser": "latest",
-    "dotenv": "latest",
+    "dotenv": "^17.4.2",
     "ejs": "latest",
     "express": "latest"
   },

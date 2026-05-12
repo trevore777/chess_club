@@ -1,0 +1,64 @@
+SERVER.JS PATCH
+
+1. Add these helper functions near the top of server.js, after app.use(...):
+
+const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+function fenToSquares(fen = START_FEN) {
+  const pieceMap = {
+    p: "♟", r: "♜", n: "♞", b: "♝", q: "♛", k: "♚",
+    P: "♙", R: "♖", N: "♘", B: "♗", Q: "♕", K: "♔"
+  };
+
+  const boardPart = String(fen || START_FEN).split(" ")[0];
+  const rows = boardPart.split("/");
+  const files = ["a","b","c","d","e","f","g","h"];
+  const squares = [];
+
+  rows.forEach((row, rowIndex) => {
+    let fileIndex = 0;
+    for (const char of row) {
+      if (/[1-8]/.test(char)) {
+        const count = Number(char);
+        for (let i = 0; i < count; i++) {
+          const rank = 8 - rowIndex;
+          const file = files[fileIndex];
+          squares.push({
+            id: `${file}${rank}`,
+            piece: "",
+            color: (rowIndex + fileIndex) % 2 === 0 ? "light" : "dark"
+          });
+          fileIndex++;
+        }
+      } else {
+        const rank = 8 - rowIndex;
+        const file = files[fileIndex];
+        squares.push({
+          id: `${file}${rank}`,
+          piece: pieceMap[char] || "",
+          color: (rowIndex + fileIndex) % 2 === 0 ? "light" : "dark"
+        });
+        fileIndex++;
+      }
+    }
+  });
+
+  return squares;
+}
+
+2. In the route that renders board-control.ejs, make sure res.render includes squares:
+
+const board = await one(`SELECT * FROM game_boards WHERE match_id = ?`, [req.params.id]) || { fen: START_FEN };
+const squares = fenToSquares(board.fen);
+res.render("board-control", {
+  match,
+  board,
+  moves,
+  squares: fenToSquares(board.fen)
+});
+
+3. In the route that renders show-board.ejs, make sure res.render includes squares:
+
+const board = await one(`SELECT * FROM game_boards WHERE match_id = ?`, [match.id]) || { fen: START_FEN };
+const squares = fenToSquares(board.fen);
+res.render("show-board", { match, board, moves, squares, leaderboard });

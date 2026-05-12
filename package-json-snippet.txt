@@ -1,0 +1,7 @@
+Add to package.json dependencies/scripts:
+
+npm install chess.js
+
+"scripts": {
+  "db:update-rules": "node scripts/update-rules.js"
+}
