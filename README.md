@@ -1,22 +1,35 @@
-# Chess Rules Upgrade
+# Chess Club Live Play
 
-This upgrade adds:
+Separate 2-player chess app for students.
 
-- Legal move validation using chess.js
-- Check/checkmate detection
-- Turn enforcement
-- Move validation API example
-- Rules mode support
+## Features
+- Student login
+- Lobby
+- Create a game against another student
+- Legal chess moves using chess.js
+- Turn-based play
+- Move history
+- Game status and automatic leaderboard update
+- Simple polling every 3 seconds
 
-## Install
-
+## Setup
 ```bash
-npm install chess.js
-npm run db:update-rules
+npm install
+cp .env.example .env
+npm run db:init
+npm run db:seed
 npm run dev
 ```
 
-## Recommended Mode
+Open:
+```text
+http://localhost:3000/login
+```
 
-- Beginners: manual
-- Competition: legal
+Demo logins:
+```text
+sam / password123
+alex / password123
+mia / password123
+noah / password123
+```

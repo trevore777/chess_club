@@ -1,26 +1,21 @@
 {
-  "name": "chess-club-app",
+  "name": "chess-club-live-play",
   "version": "1.0.0",
   "type": "module",
-  "main": "server.js",
   "scripts": {
-    "start": "node server.js",
     "dev": "nodemon server.js",
+    "start": "node server.js",
     "db:init": "node scripts/init-db.js",
-    "db:seed": "node scripts/seed-db.js",
-    "db:update-ranking-board": "node scripts/update-ranking-board.js",
-    "db:update-moves-board": "node scripts/update-moves-board.js"
+    "db:seed": "node scripts/seed.js"
   },
   "dependencies": {
-    "@libsql/client": "^0.17.3",
-    "bcryptjs": "latest",
+    "@libsql/client": "^0.15.15",
     "chess.js": "^1.4.0",
-    "cookie-parser": "latest",
-    "dotenv": "^17.4.2",
-    "ejs": "latest",
-    "express": "latest"
+    "dotenv": "^17.2.3",
+    "ejs": "^3.1.10",
+    "express": "^5.1.0"
   },
   "devDependencies": {
-    "nodemon": "latest"
+    "nodemon": "^3.1.14"
   }
 }
