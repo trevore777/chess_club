@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Board Control</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<nav>
+  <strong>Chess Club</strong>
+  <a href="/coach">Coach</a>
+  <a href="/show/board/<%= match.id %>" target="_blank">Open Display Board</a>
+  <a href="/logout">Logout</a>
+</nav>
+
+<main class="container board-page">
+  <section class="page-header">
+    <h1>Board Control</h1>
+    <p>
+      <%= match.competition_name %> — Board <%= match.board_number %>:
+      <strong><%= match.white_name || 'BYE' %></strong>
+      vs
+      <strong><%= match.black_name || 'BYE' %></strong>
+    </p>
+  </section>
+
+  <section class="card board-control-layout">
+    <div>
+      <p class="small-muted">
+        Click a piece, then click the destination square. The move saves automatically.
+      </p>
+
+      <div class="board-shell">
+        <div class="rank-labels">
+          <span>8</span><span>7</span><span>6</span><span>5</span>
+          <span>4</span><span>3</span><span>2</span><span>1</span>
+        </div>
+
+        <div class="board-fixed" data-board>
+          <% (squares || []).forEach(square => { %>
+            <div
+              class="board-square <%= square.color %>"
+              data-square="<%= square.id %>"
+            ><%= square.piece || "" %></div>
+          <% }) %>
+        </div>
+
+        <div></div>
+
+        <div class="file-labels">
+          <span>a</span><span>b</span><span>c</span><span>d</span>
+          <span>e</span><span>f</span><span>g</span><span>h</span>
+        </div>
+      </div>
+
+      <form method="POST" action="/matches/<%= match.id %>/board" id="boardForm">
+        <input type="hidden" id="fen" name="fen" value="<%= board.fen %>">
+        <input type="hidden" id="from_square" name="from_square" value="">
+        <input type="hidden" id="to_square" name="to_square" value="">
+        <input type="hidden" id="piece" name="piece" value="">
+        <button type="submit">Save Current Board</button>
+      </form>
+
+      <form method="POST" action="/matches/<%= match.id %>/board/reset">
+        <button type="submit" class="secondary">Reset Board and Moves</button>
+      </form>
+    </div>
+
+    <aside class="move-panel">
+      <h2>Move History</h2>
+
+      <% if (!moves || !moves.length) { %>
+        <p class="small-muted">No moves recorded yet.</p>
+      <% } else { %>
+        <ol class="move-list">
+          <% moves.forEach(m => { %>
+            <li>
+              <%= m.piece %> <%= m.from_square %> → <%= m.to_square %>
+            </li>
+          <% }) %>
+        </ol>
+      <% } %>
+    </aside>
+  </section>
+</main>
+
+<script src="/js/board.js"></script>
+</body>
+</html>

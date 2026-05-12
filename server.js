@@ -2,190 +2,789 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
-import { Chess } from "chess.js";
 import { all, one, run } from "./lib/db.js";
+import { Chess } from "chess.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+const START_FEN =
+  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+/* -----------------------------
+   Helpers
+----------------------------- */
+
 function fenToSquares(fen = START_FEN) {
-  const pieceMap = { p:"♟", r:"♜", n:"♞", b:"♝", q:"♛", k:"♚", P:"♙", R:"♖", N:"♘", B:"♗", Q:"♕", K:"♔" };
+  const pieceMap = {
+    p: "♟",
+    r: "♜",
+    n: "♞",
+    b: "♝",
+    q: "♛",
+    k: "♚",
+    P: "♙",
+    R: "♖",
+    N: "♘",
+    B: "♗",
+    Q: "♕",
+    K: "♔"
+  };
+
   const rows = String(fen || START_FEN).split(" ")[0].split("/");
-  const files = ["a","b","c","d","e","f","g","h"];
+  const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
   const squares = [];
+
   rows.forEach((row, rowIndex) => {
     let fileIndex = 0;
+
     for (const char of row) {
       if (/[1-8]/.test(char)) {
         for (let i = 0; i < Number(char); i++) {
           const rank = 8 - rowIndex;
           const file = files[fileIndex];
-          squares.push({ id: `${file}${rank}`, piece: "", color: (rowIndex + fileIndex) % 2 === 0 ? "light" : "dark" });
+
+          squares.push({
+            id: `${file}${rank}`,
+            piece: "",
+            color: (rowIndex + fileIndex) % 2 === 0 ? "light" : "dark"
+          });
+
           fileIndex++;
         }
       } else {
         const rank = 8 - rowIndex;
         const file = files[fileIndex];
-        squares.push({ id: `${file}${rank}`, piece: pieceMap[char] || "", color: (rowIndex + fileIndex) % 2 === 0 ? "light" : "dark" });
+
+        squares.push({
+          id: `${file}${rank}`,
+          piece: pieceMap[char] || "",
+          color: (rowIndex + fileIndex) % 2 === 0 ? "light" : "dark"
+        });
+
         fileIndex++;
       }
     }
   });
+
   return squares;
 }
 
 async function getLeaderboard() {
-  return all(`SELECT id, name, username, rating, wins, draws, losses, points FROM users WHERE role = 'student' ORDER BY points DESC, wins DESC, rating DESC, name ASC`);
+  return all(`
+    SELECT
+      id,
+      name,
+      username,
+      COALESCE(points, 0) AS points,
+      COALESCE(wins, 0) AS wins,
+      COALESCE(draws, 0) AS draws,
+      COALESCE(losses, 0) AS losses,
+      COALESCE(rating, 1200) AS rating
+    FROM users
+    WHERE role = 'student'
+    ORDER BY points DESC, wins DESC, rating DESC, name ASC
+  `);
 }
 
-async function getGame(id) {
+async function getRecentMatches() {
+  return all(`
+    SELECT
+      m.*,
+      c.name AS competition_name,
+      w.name AS white_name,
+      b.name AS black_name
+    FROM matches m
+    LEFT JOIN competitions c ON c.id = m.competition_id
+    LEFT JOIN users w ON w.id = m.white_player_id
+    LEFT JOIN users b ON b.id = m.black_player_id
+    ORDER BY m.id DESC
+    LIMIT 20
+  `);
+}
+
+async function getFeaturedMatch() {
   return one(`
-    SELECT g.*, w.name AS white_name, b.name AS black_name
-    FROM live_games g
-    JOIN users w ON w.id = g.white_player_id
-    JOIN users b ON b.id = g.black_player_id
-    WHERE g.id = ?
-  `, [id]);
+    SELECT
+      m.*,
+      c.name AS competition_name,
+      w.name AS white_name,
+      b.name AS black_name
+    FROM matches m
+    LEFT JOIN competitions c ON c.id = m.competition_id
+    LEFT JOIN users w ON w.id = m.white_player_id
+    LEFT JOIN users b ON b.id = m.black_player_id
+    WHERE m.featured = 1
+    ORDER BY m.id DESC
+    LIMIT 1
+  `);
 }
 
-async function updateRatings(game, result) {
-  if (result === "white_win") {
-    await run(`UPDATE users SET wins = wins + 1, points = points + 1, rating = rating + 15 WHERE id = ?`, [game.white_player_id]);
-    await run(`UPDATE users SET losses = losses + 1, rating = rating - 10 WHERE id = ?`, [game.black_player_id]);
+async function getBoardForMatch(matchId) {
+  let board = await one(
+    `SELECT * FROM game_boards WHERE match_id = ? LIMIT 1`,
+    [matchId]
+  );
+
+  if (!board) {
+    await run(
+      `INSERT INTO game_boards (match_id, fen) VALUES (?, ?)`,
+      [matchId, START_FEN]
+    );
+
+    board = await one(
+      `SELECT * FROM game_boards WHERE match_id = ? LIMIT 1`,
+      [matchId]
+    );
   }
-  if (result === "black_win") {
-    await run(`UPDATE users SET wins = wins + 1, points = points + 1, rating = rating + 15 WHERE id = ?`, [game.black_player_id]);
-    await run(`UPDATE users SET losses = losses + 1, rating = rating - 10 WHERE id = ?`, [game.white_player_id]);
-  }
-  if (result === "draw") {
-    await run(`UPDATE users SET draws = draws + 1, points = points + 0.5 WHERE id = ?`, [game.white_player_id]);
-    await run(`UPDATE users SET draws = draws + 1, points = points + 0.5 WHERE id = ?`, [game.black_player_id]);
-  }
+
+  return board || { match_id: matchId, fen: START_FEN };
 }
 
-app.get("/", (req, res) => res.redirect("/login"));
+async function getMovesForMatch(matchId) {
+  return all(
+    `
+    SELECT *
+    FROM match_moves
+    WHERE match_id = ?
+    ORDER BY move_number ASC
+    `,
+    [matchId]
+  );
+}
 
-app.get("/login", (req, res) => res.render("login", { error: null }));
+/* -----------------------------
+   Auth
+----------------------------- */
 
-app.post("/login", async (req, res) => {
-  const { username, password } = req.body;
-  const user = await one(`SELECT * FROM users WHERE username = ? AND password_hash = ? LIMIT 1`, [username, password]);
-  if (!user) return res.status(401).render("login", { error: "Invalid username or password." });
-  res.redirect(`/lobby?user=${user.id}`);
-});
-
-app.get("/logout", (req, res) => res.redirect("/login"));
-
-app.get("/lobby", async (req, res) => {
-  const userId = Number(req.query.user);
-  const currentUser = await one(`SELECT * FROM users WHERE id = ?`, [userId]);
-  if (!currentUser) return res.redirect("/login");
-
-  const players = await getLeaderboard();
-  const myGames = await all(`
-    SELECT g.*, w.name AS white_name, b.name AS black_name
-    FROM live_games g
-    JOIN users w ON w.id = g.white_player_id
-    JOIN users b ON b.id = g.black_player_id
-    WHERE (g.white_player_id = ? OR g.black_player_id = ?) AND g.status = 'active'
-    ORDER BY g.updated_at DESC
-  `, [currentUser.id, currentUser.id]);
-
-  res.render("lobby", { currentUser, players, myGames });
-});
-
-app.post("/games", async (req, res) => {
-  const whitePlayerId = Number(req.body.white_player_id);
-  const blackPlayerId = Number(req.body.black_player_id);
-  if (!whitePlayerId || !blackPlayerId || whitePlayerId === blackPlayerId) return res.redirect(`/lobby?user=${whitePlayerId || ""}`);
-
-  await run(`
-    INSERT INTO live_games (white_player_id, black_player_id, fen, pgn, status, result, turn)
-    VALUES (?, ?, ?, '', 'active', 'pending', 'w')
-  `, [whitePlayerId, blackPlayerId, START_FEN]);
-
-  const game = await one(`SELECT * FROM live_games ORDER BY id DESC LIMIT 1`);
-  res.redirect(`/games/${game.id}?user=${whitePlayerId}`);
-});
-
-app.get("/games/:id", async (req, res) => {
-  const userId = Number(req.query.user);
-  const currentUser = await one(`SELECT * FROM users WHERE id = ?`, [userId]);
-  const game = await getGame(req.params.id);
-  if (!currentUser || !game) return res.redirect("/login");
-
-  const moves = await all(`SELECT * FROM live_moves WHERE game_id = ? ORDER BY move_number ASC`, [game.id]);
-  res.render("game", { currentUser, game, moves, squares: fenToSquares(game.fen) });
-});
-
-app.get("/api/games/:id/state", async (req, res) => {
-  const game = await getGame(req.params.id);
-  if (!game) return res.json({ success: false });
-  res.json({ success: true, fen: game.fen, status: game.status, result: game.result, turn: game.turn });
-});
-
-app.post("/api/games/:id/move", async (req, res) => {
-  try {
-    const gameId = req.params.id;
-    const { from, to, playerId } = req.body;
-    const gameRecord = await getGame(gameId);
-
-    if (!gameRecord) return res.json({ success: false, error: "Game not found." });
-    if (gameRecord.status !== "active") return res.json({ success: false, error: "This game is already finished." });
-
-    const expectedPlayerId = gameRecord.turn === "w" ? Number(gameRecord.white_player_id) : Number(gameRecord.black_player_id);
-    if (Number(playerId) !== expectedPlayerId) return res.json({ success: false, error: "It is not your turn." });
-
-    const chess = new Chess(gameRecord.fen || START_FEN);
-    const move = chess.move({ from, to, promotion: "q" });
-    if (!move) return res.json({ success: false, error: "Illegal move." });
-
-    let status = "active";
-    let result = "pending";
-    if (chess.isCheckmate()) {
-      status = "finished";
-      result = chess.turn() === "w" ? "black_win" : "white_win";
-    } else if (chess.isDraw()) {
-      status = "finished";
-      result = "draw";
-    }
-
-    const moveCount = await one(`SELECT COUNT(*) AS count FROM live_moves WHERE game_id = ?`, [gameId]);
-    const moveNumber = Number(moveCount?.count || 0) + 1;
-
-    await run(`
-      INSERT INTO live_moves (game_id, move_number, player_id, from_square, to_square, san, fen_after)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [gameId, moveNumber, Number(playerId), from, to, move.san, chess.fen()]);
-
-    await run(`
-      UPDATE live_games SET fen = ?, pgn = ?, status = ?, result = ?, turn = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-    `, [chess.fen(), chess.pgn(), status, result, chess.turn(), gameId]);
-
-    if (status === "finished") await updateRatings(gameRecord, result);
-
-    res.json({ success: true, fen: chess.fen(), status, result, turn: chess.turn() });
-  } catch (err) {
-    console.error(err);
-    res.json({ success: false, error: "Move failed." });
-  }
-});
-
-app.get("/student", (req, res) => {
+app.get("/", (req, res) => {
   res.redirect("/login");
 });
 
-app.use((req, res) => res.status(404).send("<h1>404</h1><p>Page not found.</p>"));
+app.get("/login", (req, res) => {
+  res.render("login", { error: null });
+});
 
-app.listen(PORT, () => console.log(`Chess Club Live Play running on port ${PORT}`));
+app.post("/login", async (req, res) => {
+  const { username, password } = req.body;
+
+  if (username === "coach" && password === "password123") {
+    return res.redirect("/coach");
+  }
+
+  if (username === "sam" && password === "password123") {
+    return res.redirect("/student");
+  }
+
+  return res.status(401).render("login", {
+    error: "Invalid username or password."
+  });
+});
+
+app.get("/logout", (req, res) => {
+  res.redirect("/login");
+});
+
+/* -----------------------------
+   Student
+----------------------------- */
+
+app.get("/student", async (req, res) => {
+  const currentUser =
+    (await one(`SELECT * FROM users WHERE username = ? LIMIT 1`, ["sam"])) || {
+      id: 1,
+      name: "Sam Student",
+      username: "sam",
+      role: "student"
+    };
+
+  const matches = await all(
+    `
+    SELECT
+      m.*,
+      c.name AS competition_name,
+      w.name AS white_name,
+      b.name AS black_name
+    FROM matches m
+    LEFT JOIN competitions c ON c.id = m.competition_id
+    LEFT JOIN users w ON w.id = m.white_player_id
+    LEFT JOIN users b ON b.id = m.black_player_id
+    WHERE m.white_player_id = ? OR m.black_player_id = ?
+    ORDER BY m.id DESC
+    `,
+    [currentUser.id, currentUser.id]
+  );
+
+  res.render("student-dashboard", {
+    currentUser,
+    user: currentUser,
+    matches
+  });
+});
+
+/* -----------------------------
+   Coach Dashboard
+----------------------------- */
+
+app.get("/coach", async (req, res) => {
+  const currentUser = {
+    id: 999,
+    name: "Coach",
+    username: "coach",
+    role: "coach"
+  };
+
+  const students = await one(
+    `SELECT COUNT(*) AS count FROM users WHERE role = 'student'`
+  );
+
+  const comps = await one(`SELECT COUNT(*) AS count FROM competitions`);
+
+  const active = await one(
+    `SELECT COUNT(*) AS count FROM competitions WHERE status = 'active'`
+  );
+
+  const leaderboard = await getLeaderboard();
+  const recentMatches = await getRecentMatches();
+  const featured = await getFeaturedMatch();
+
+  res.render("coach-dashboard", {
+    currentUser,
+    user: currentUser,
+    students: students || { count: 0 },
+    comps: comps || { count: 0 },
+    active: active || { count: 0 },
+    leaderboard,
+    recentMatches,
+    featured,
+    competitions: []
+  });
+});
+
+/* -----------------------------
+   Players / Leaderboard
+----------------------------- */
+
+app.get("/players", async (req, res) => {
+  const players = await getLeaderboard();
+
+  res.render("players", {
+    players,
+    students: players
+  });
+});
+
+app.post("/players/import", async (req, res) => {
+  const csv = req.body.csv || "";
+
+  const lines = csv
+    .split("\n")
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    const [name, username, rating] = line.split(",").map(v => v.trim());
+
+    if (!name || !username) continue;
+
+    await run(
+      `
+      INSERT INTO users
+        (name, username, password_hash, role, rating, wins, losses, draws, points)
+      VALUES
+        (?, ?, ?, 'student', ?, 0, 0, 0, 0)
+      `,
+      [
+        name,
+        username.toLowerCase(),
+        "password123",
+        Number(rating) || 1200
+      ]
+    ).catch(() => {});
+  }
+
+  res.redirect("/players");
+});
+
+
+app.post("/players", async (req, res) => {
+  const { name, username } = req.body;
+
+  if (name && username) {
+    await run(
+      `
+      INSERT INTO users
+        (name, username, password_hash, role, rating, wins, losses, draws, points)
+      VALUES
+        (?, ?, ?, 'student', 1200, 0, 0, 0, 0)
+      `,
+      [name, username, "password123"]
+    );
+  }
+
+  res.redirect("/players");
+});
+
+app.get("/leaderboard", async (req, res) => {
+  const leaderboard = await getLeaderboard();
+
+  res.render("leaderboard", {
+    leaderboard,
+    players: leaderboard
+  });
+});
+
+/* -----------------------------
+   Competitions
+----------------------------- */
+
+app.post("/competitions", async (req, res) => {
+  const name = req.body.name || "Chess Club Competition";
+
+  await run(
+    `INSERT INTO competitions (name, status) VALUES (?, 'active')`,
+    [name]
+  );
+
+  const comp = await one(
+    `SELECT * FROM competitions ORDER BY id DESC LIMIT 1`
+  );
+
+  const players = await getLeaderboard();
+
+  let boardNumber = 1;
+
+  for (let i = 0; i < players.length; i += 2) {
+    const white = players[i];
+    const black = players[i + 1] || null;
+
+    await run(
+      `
+      INSERT INTO matches
+        (competition_id, round_number, board_number, white_player_id, black_player_id, result, featured)
+      VALUES
+        (?, 1, ?, ?, ?, 'pending', 0)
+      `,
+      [comp.id, boardNumber, white?.id || null, black?.id || null]
+    );
+
+    boardNumber++;
+  }
+
+  res.redirect("/coach");
+});
+
+/* -----------------------------
+   Match Result / Feature
+----------------------------- */
+
+app.post("/matches/:id/result", async (req, res) => {
+  const matchId = req.params.id;
+  const { result } = req.body;
+
+  const match = await one(`SELECT * FROM matches WHERE id = ?`, [matchId]);
+
+  if (!match) {
+    return res.redirect("/coach");
+  }
+
+  await run(`UPDATE matches SET result = ? WHERE id = ?`, [result, matchId]);
+
+  if (result === "white_win" && match.white_player_id) {
+    await run(
+      `
+      UPDATE users
+      SET wins = COALESCE(wins, 0) + 1,
+          points = COALESCE(points, 0) + 1,
+          rating = COALESCE(rating, 1200) + 15
+      WHERE id = ?
+      `,
+      [match.white_player_id]
+    );
+
+    if (match.black_player_id) {
+      await run(
+        `
+        UPDATE users
+        SET losses = COALESCE(losses, 0) + 1,
+            rating = COALESCE(rating, 1200) - 10
+        WHERE id = ?
+        `,
+        [match.black_player_id]
+      );
+    }
+  }
+
+  if (result === "black_win" && match.black_player_id) {
+    await run(
+      `
+      UPDATE users
+      SET wins = COALESCE(wins, 0) + 1,
+          points = COALESCE(points, 0) + 1,
+          rating = COALESCE(rating, 1200) + 15
+      WHERE id = ?
+      `,
+      [match.black_player_id]
+    );
+
+    if (match.white_player_id) {
+      await run(
+        `
+        UPDATE users
+        SET losses = COALESCE(losses, 0) + 1,
+            rating = COALESCE(rating, 1200) - 10
+        WHERE id = ?
+        `,
+        [match.white_player_id]
+      );
+    }
+  }
+
+  if (result === "draw") {
+    if (match.white_player_id) {
+      await run(
+        `
+        UPDATE users
+        SET draws = COALESCE(draws, 0) + 1,
+            points = COALESCE(points, 0) + 0.5
+        WHERE id = ?
+        `,
+        [match.white_player_id]
+      );
+    }
+
+    if (match.black_player_id) {
+      await run(
+        `
+        UPDATE users
+        SET draws = COALESCE(draws, 0) + 1,
+            points = COALESCE(points, 0) + 0.5
+        WHERE id = ?
+        `,
+        [match.black_player_id]
+      );
+    }
+  }
+
+  res.redirect("/coach");
+});
+
+app.post("/matches/:id/feature", async (req, res) => {
+  await run(`UPDATE matches SET featured = 0`);
+  await run(`UPDATE matches SET featured = 1 WHERE id = ?`, [req.params.id]);
+
+  res.redirect("/coach");
+});
+
+/* -----------------------------
+   Board Control
+----------------------------- */
+
+app.get("/matches/:id/board", async (req, res) => {
+  const match = await one(
+    `
+    SELECT
+      m.*,
+      c.name AS competition_name,
+      w.name AS white_name,
+      b.name AS black_name
+    FROM matches m
+    LEFT JOIN competitions c ON c.id = m.competition_id
+    LEFT JOIN users w ON w.id = m.white_player_id
+    LEFT JOIN users b ON b.id = m.black_player_id
+    WHERE m.id = ?
+    LIMIT 1
+    `,
+    [req.params.id]
+  );
+
+  if (!match) {
+    return res.status(404).render("404");
+  }
+
+  const board = await getBoardForMatch(match.id);
+  const moves = await getMovesForMatch(match.id);
+  const squares = fenToSquares(board.fen);
+
+  res.render("board-control", {
+    match,
+    board,
+    moves,
+    squares
+  });
+});
+
+app.post("/matches/:id/board", async (req, res) => {
+  const matchId = req.params.id;
+  const { fen, from_square, to_square, piece } = req.body;
+
+  const existing = await one(
+    `SELECT * FROM game_boards WHERE match_id = ? LIMIT 1`,
+    [matchId]
+  );
+
+  if (existing) {
+    await run(
+      `
+      UPDATE game_boards
+      SET fen = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE match_id = ?
+      `,
+      [fen || START_FEN, matchId]
+    );
+  } else {
+    await run(
+      `INSERT INTO game_boards (match_id, fen) VALUES (?, ?)`,
+      [matchId, fen || START_FEN]
+    );
+  }
+
+  if (from_square && to_square && piece) {
+    const lastMove = await one(
+      `
+      SELECT MAX(move_number) AS maxMove
+      FROM match_moves
+      WHERE match_id = ?
+      `,
+      [matchId]
+    );
+
+    const nextMove = Number(lastMove?.maxMove || 0) + 1;
+
+    await run(
+      `
+      INSERT INTO match_moves
+        (match_id, move_number, from_square, to_square, piece, fen_after)
+      VALUES
+        (?, ?, ?, ?, ?, ?)
+      `,
+      [matchId, nextMove, from_square, to_square, piece, fen || START_FEN]
+    );
+  }
+
+  res.redirect(`/matches/${matchId}/board`);
+});
+
+app.post("/matches/:id/board/reset", async (req, res) => {
+  const matchId = req.params.id;
+
+  await run(`DELETE FROM match_moves WHERE match_id = ?`, [matchId]);
+
+  const existing = await one(
+    `SELECT * FROM game_boards WHERE match_id = ? LIMIT 1`,
+    [matchId]
+  );
+
+  if (existing) {
+    await run(
+      `
+      UPDATE game_boards
+      SET fen = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE match_id = ?
+      `,
+      [START_FEN, matchId]
+    );
+  } else {
+    await run(
+      `INSERT INTO game_boards (match_id, fen) VALUES (?, ?)`,
+      [matchId, START_FEN]
+    );
+  }
+
+  res.redirect(`/matches/${matchId}/board`);
+});
+
+/* -----------------------------
+   Show Screens
+----------------------------- */
+
+app.get("/show", async (req, res) => {
+  const match = await getFeaturedMatch();
+  const leaderboard = await getLeaderboard();
+
+  if (!match) {
+    return res.render("show-screen", {
+      match: null,
+      board: { fen: START_FEN },
+      moves: [],
+      squares: fenToSquares(START_FEN),
+      leaderboard
+    });
+  }
+
+  const board = await getBoardForMatch(match.id);
+  const moves = await getMovesForMatch(match.id);
+  const squares = fenToSquares(board.fen);
+
+  res.render("show-screen", {
+    match,
+    board,
+    moves,
+    squares,
+    leaderboard
+  });
+});
+
+app.get("/show/board/:id", async (req, res) => {
+  const match = await one(
+    `
+    SELECT
+      m.*,
+      c.name AS competition_name,
+      w.name AS white_name,
+      b.name AS black_name
+    FROM matches m
+    LEFT JOIN competitions c ON c.id = m.competition_id
+    LEFT JOIN users w ON w.id = m.white_player_id
+    LEFT JOIN users b ON b.id = m.black_player_id
+    WHERE m.id = ?
+    LIMIT 1
+    `,
+    [req.params.id]
+  );
+
+  if (!match) {
+    return res.status(404).render("404");
+  }
+
+  const board = await getBoardForMatch(match.id);
+  const moves = await getMovesForMatch(match.id);
+  const leaderboard = await getLeaderboard();
+  const squares = fenToSquares(board.fen);
+
+  res.render("show-screen", {
+    match,
+    board,
+    moves,
+    squares,
+    leaderboard
+  });
+});
+
+
+app.post("/api/matches/:id/move", async (req, res) => {
+  try {
+    const matchId = req.params.id;
+    const { from, to } = req.body;
+
+    const board = await getBoardForMatch(matchId);
+
+    const game = new Chess(board.fen || START_FEN);
+
+    const move = game.move({
+      from,
+      to,
+      promotion: "q"
+    });
+
+    if (!move) {
+      return res.json({
+        success: false,
+        error: "Illegal move"
+      });
+    }
+
+    const newFen = game.fen();
+
+    await run(
+      `
+      UPDATE game_boards
+      SET fen = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE match_id = ?
+      `,
+      [newFen, matchId]
+    );
+
+    const lastMove = await one(
+      `
+      SELECT MAX(move_number) AS maxMove
+      FROM match_moves
+      WHERE match_id = ?
+      `,
+      [matchId]
+    );
+
+    const nextMove = Number(lastMove?.maxMove || 0) + 1;
+
+    await run(
+      `
+      INSERT INTO match_moves
+      (
+        match_id,
+        move_number,
+        from_square,
+        to_square,
+        piece,
+        fen_after
+      )
+      VALUES
+      (?, ?, ?, ?, ?, ?)
+      `,
+      [
+        matchId,
+        nextMove,
+        from,
+        to,
+        move.piece,
+        newFen
+      ]
+    );
+
+    let result = "pending";
+
+    if (game.isCheckmate()) {
+      result = game.turn() === "w"
+        ? "black_win"
+        : "white_win";
+    }
+
+    if (game.isDraw()) {
+      result = "draw";
+    }
+
+    await run(
+      `UPDATE matches SET result = ? WHERE id = ?`,
+      [result, matchId]
+    );
+
+    return res.json({
+      success: true,
+      fen: newFen,
+      check: game.inCheck(),
+      checkmate: game.isCheckmate(),
+      draw: game.isDraw(),
+      turn: game.turn()
+    });
+  } catch (err) {
+    console.error(err);
+
+    return res.json({
+      success: false,
+      error: "Move failed"
+    });
+  }
+});
+
+/* -----------------------------
+   404
+----------------------------- */
+
+app.use((req, res) => {
+  res.status(404).render("404");
+});
+
+app.listen(PORT, () => {
+  console.log(`Chess Club app running on port ${PORT}`);
+});
