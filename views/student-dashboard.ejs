@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Student Chess Club</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<nav>
+  <strong>Chess Club</strong>
+  <a href="/student">Student</a>
+  <a href="/leaderboard">Leaderboard</a>
+  <a href="/logout">Logout</a>
+</nav>
+
+<main class="container">
+
+  <section class="page-header">
+    <h1>Students Chess Club</h1>
+    <p>
+      Welcome,
+      <strong><%= currentUser?.name || user?.name || "Student" %></strong>.
+      Your competition games appear below.
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>My Games</h2>
+
+    <% if (!matches || !matches.length) { %>
+      <p>No games have been assigned yet.</p>
+    <% } else { %>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Competition</th>
+            <th>Round</th>
+            <th>Board</th>
+            <th>White</th>
+            <th>Black</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <% matches.forEach(m => { %>
+            <tr>
+              <td><%= m.competition_name || "Competition" %></td>
+              <td><%= m.round_number || 1 %></td>
+              <td><%= m.board_number || "-" %></td>
+              <td><%= m.white_name || "BYE" %></td>
+              <td><%= m.black_name || "BYE" %></td>
+              <td><%= m.result || "pending" %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+
+    <% } %>
+  </section>
+
+  <section class="card">
+    <h2>What to do</h2>
+    <p>
+      Check your assigned board, play your game, then report the result to the coach.
+    </p>
+  </section>
+
+</main>
+
+</body>
+</html>

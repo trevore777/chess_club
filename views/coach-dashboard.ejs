@@ -21,36 +21,21 @@
     <p>Manage players, generate competitions, enter results, select a show-screen game, and control the display board.</p>
   </section>
 
+  <% if (typeof message !== "undefined" && message) { %>
+    <section class="card"><p><strong><%= message %></strong></p></section>
+  <% } %>
+
   <section class="grid three">
-    <div class="card stat">
-      <span>Students</span>
-      <strong><%= students?.count || 0 %></strong>
-    </div>
-
-    <div class="card stat">
-      <span>Competitions</span>
-      <strong><%= comps?.count || 0 %></strong>
-    </div>
-
-    <div class="card stat">
-      <span>Active</span>
-      <strong><%= active?.count || 0 %></strong>
-    </div>
+    <div class="card stat"><span>Students</span><strong><%= students?.count || 0 %></strong></div>
+    <div class="card stat"><span>Competitions</span><strong><%= comps?.count || 0 %></strong></div>
+    <div class="card stat"><span>Active</span><strong><%= active?.count || 0 %></strong></div>
   </section>
 
   <section class="card">
     <h2>Current Show Screen Game</h2>
-
     <% if (featured) { %>
-      <p>
-        <strong><%= featured.competition_name %></strong>
-        — Round <%= featured.round_number %>, Board <%= featured.board_number %>
-      </p>
-
-      <p class="versus">
-        <%= featured.white_name || "BYE" %> vs <%= featured.black_name || "BYE" %>
-      </p>
-
+      <p><strong><%= featured.competition_name %></strong> — Round <%= featured.round_number %>, Board <%= featured.board_number %></p>
+      <p class="versus"><%= featured.white_name || "BYE" %> vs <%= featured.black_name || "BYE" %></p>
       <a class="button" href="/show" target="_blank">Open Show Screen</a>
       <a class="button secondary" href="/matches/<%= featured.id %>/board">Control Board</a>
     <% } else { %>
@@ -60,8 +45,7 @@
 
   <section class="card">
     <h2>Create Competition</h2>
-    <p>Players are paired using the current leaderboard order.</p>
-
+    <p>Round 1 players are paired using the current leaderboard order.</p>
     <form method="POST" action="/competitions" class="inline-form">
       <input type="text" name="name" placeholder="Competition name" required>
       <button type="submit">Create Round 1</button>
@@ -69,22 +53,47 @@
   </section>
 
   <section class="card">
-    <h2>Leaderboard</h2>
+    <h2>Generate Next Round</h2>
+    <% if (!competitions || !competitions.length) { %>
+      <p>No competitions yet.</p>
+    <% } else { %>
+      <table>
+        <thead>
+          <tr>
+            <th>Competition</th>
+            <th>Status</th>
+            <th>Latest Round</th>
+            <th>Pending</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% competitions.forEach(c => { %>
+            <tr>
+              <td><%= c.name %></td>
+              <td><%= c.status || "active" %></td>
+              <td><%= c.latest_round || 0 %></td>
+              <td><%= c.pending_matches || 0 %></td>
+              <td>
+                <form method="POST" action="/competitions/<%= c.id %>/next-round">
+                  <button type="submit">Generate Next Round</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </section>
 
+  <section class="card">
+    <h2>Leaderboard</h2>
     <% if (!leaderboard || !leaderboard.length) { %>
       <p>No students found.</p>
     <% } else { %>
       <table>
         <thead>
-          <tr>
-            <th>Rank</th>
-            <th>Student</th>
-            <th>Pts</th>
-            <th>W</th>
-            <th>D</th>
-            <th>L</th>
-            <th>Rating</th>
-          </tr>
+          <tr><th>Rank</th><th>Student</th><th>Pts</th><th>W</th><th>D</th><th>L</th><th>Rating</th></tr>
         </thead>
         <tbody>
           <% leaderboard.forEach((p, index) => { %>
@@ -105,25 +114,18 @@
 
   <section class="card">
     <h2>Recent Matches</h2>
-
     <% if (!recentMatches || !recentMatches.length) { %>
       <p>No matches yet.</p>
     <% } else { %>
       <table>
         <thead>
-          <tr>
-            <th>Competition</th>
-            <th>Board</th>
-            <th>Game</th>
-            <th>Result</th>
-            <th>Actions</th>
-          </tr>
+          <tr><th>Competition</th><th>Round</th><th>Board</th><th>Game</th><th>Result</th><th>Actions</th></tr>
         </thead>
-
         <tbody>
           <% recentMatches.forEach(m => { %>
             <tr>
               <td><%= m.competition_name %></td>
+              <td><%= m.round_number %></td>
               <td><%= m.board_number %></td>
               <td><%= m.white_name || "BYE" %> vs <%= m.black_name || "BYE" %></td>
               <td><%= m.result || "pending" %></td>
@@ -137,11 +139,7 @@
                   </select>
                   <button type="submit">Save</button>
                 </form>
-
-                <form method="POST" action="/matches/<%= m.id %>/feature">
-                  <button type="submit">Show</button>
-                </form>
-
+                <form method="POST" action="/matches/<%= m.id %>/feature"><button type="submit">Show</button></form>
                 <a class="button secondary" href="/matches/<%= m.id %>/board">Board</a>
               </td>
             </tr>
@@ -151,6 +149,5 @@
     <% } %>
   </section>
 </main>
-
 </body>
 </html>

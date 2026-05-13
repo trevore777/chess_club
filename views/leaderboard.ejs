@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Leaderboard</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<nav>
+  <strong>Chess Club</strong>
+
+  <% if (typeof currentUser !== "undefined" && currentUser?.role === "coach") { %>
+    <a href="/coach">Coach</a>
+    <a href="/players">Players</a>
+  <% } else { %>
+    <a href="/student">Student Home</a>
+  <% } %>
+
+  <a href="/leaderboard">Leaderboard</a>
+  <a href="/logout">Logout</a>
+</nav>
+
+<main class="container">
+
+  <section class="page-header">
+    <h1>Leaderboard</h1>
+    <p>Student rankings based on points, wins and rating.</p>
+  </section>
+
+  <section class="card">
+    <% const list = leaderboard || players || []; %>
+
+    <% if (!list.length) { %>
+      <p>No leaderboard data available.</p>
+    <% } else { %>
+      <table>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Student</th>
+            <th>Points</th>
+            <th>Wins</th>
+            <th>Draws</th>
+            <th>Losses</th>
+            <th>Rating</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <% list.forEach((p, index) => { %>
+            <tr>
+              <td><strong><%= index + 1 %></strong></td>
+              <td><%= p.name %></td>
+              <td><%= p.points || 0 %></td>
+              <td><%= p.wins || 0 %></td>
+              <td><%= p.draws || 0 %></td>
+              <td><%= p.losses || 0 %></td>
+              <td><%= p.rating || 1200 %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </section>
+
+</main>
+
+</body>
+</html>

@@ -269,7 +269,8 @@ app.get("/coach", async (req, res) => {
     leaderboard,
     recentMatches,
     featured,
-    competitions: []
+    competitions: [],
+    message: req.query.message || null
   });
 });
 
@@ -340,7 +341,12 @@ app.post("/players", async (req, res) => {
 app.get("/leaderboard", async (req, res) => {
   const leaderboard = await getLeaderboard();
 
+  const currentUser = {
+    role: "student"
+  };
+
   res.render("leaderboard", {
+    currentUser,
     leaderboard,
     players: leaderboard
   });
@@ -776,6 +782,199 @@ app.post("/api/matches/:id/move", async (req, res) => {
     });
   }
 });
+
+
+
+async function getCompetitionSummaries() {
+  return all(`
+    SELECT
+      c.id,
+      c.name,
+      c.status,
+      COALESCE(MAX(m.round_number), 0) AS latest_round,
+      SUM(CASE WHEN m.result = 'pending' THEN 1 ELSE 0 END) AS pending_matches
+    FROM competitions c
+    LEFT JOIN matches m ON m.competition_id = c.id
+    GROUP BY c.id, c.name, c.status
+    ORDER BY c.id DESC
+  `);
+}
+
+async function getCompetitionPlayers(competitionId) {
+  return all(`
+    SELECT DISTINCT
+      u.id,
+      u.name,
+      u.username,
+      COALESCE(u.rating, 1200) AS rating
+    FROM users u
+    JOIN matches m
+      ON m.white_player_id = u.id
+      OR m.black_player_id = u.id
+    WHERE m.competition_id = ?
+      AND u.role = 'student'
+    ORDER BY u.name ASC
+  `, [competitionId]);
+}
+
+async function getCompetitionScores(competitionId) {
+  const players = await getCompetitionPlayers(competitionId);
+
+  const scores = players.map((p) => ({
+    ...p,
+    competition_points: 0,
+    opponents: new Set(),
+    had_bye: false
+  }));
+
+  const byId = new Map(scores.map((p) => [Number(p.id), p]));
+
+  const matches = await all(
+    `SELECT * FROM matches WHERE competition_id = ? ORDER BY round_number ASC, board_number ASC`,
+    [competitionId]
+  );
+
+  for (const m of matches) {
+    const whiteId = m.white_player_id ? Number(m.white_player_id) : null;
+    const blackId = m.black_player_id ? Number(m.black_player_id) : null;
+
+    if (whiteId && blackId) {
+      byId.get(whiteId)?.opponents.add(blackId);
+      byId.get(blackId)?.opponents.add(whiteId);
+    }
+
+    if (whiteId && !blackId) {
+      const p = byId.get(whiteId);
+      if (p) {
+        p.had_bye = true;
+        if (m.result === "white_win") p.competition_points += 1;
+      }
+    }
+
+    if (m.result === "white_win" && whiteId && blackId) byId.get(whiteId).competition_points += 1;
+    if (m.result === "black_win" && whiteId && blackId) byId.get(blackId).competition_points += 1;
+    if (m.result === "draw" && whiteId && blackId) {
+      byId.get(whiteId).competition_points += 0.5;
+      byId.get(blackId).competition_points += 0.5;
+    }
+  }
+
+  return scores.sort((a, b) => {
+    if (b.competition_points !== a.competition_points) return b.competition_points - a.competition_points;
+    if (b.rating !== a.rating) return b.rating - a.rating;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function buildSwissPairings(players) {
+  const remaining = [...players];
+  const pairings = [];
+
+  if (remaining.length % 2 === 1) {
+    let byeIndex = -1;
+
+    for (let i = remaining.length - 1; i >= 0; i--) {
+      if (!remaining[i].had_bye) {
+        byeIndex = i;
+        break;
+      }
+    }
+
+    if (byeIndex === -1) byeIndex = remaining.length - 1;
+
+    const byePlayer = remaining.splice(byeIndex, 1)[0];
+    pairings.push({ white: byePlayer, black: null, bye: true });
+  }
+
+  while (remaining.length > 0) {
+    const white = remaining.shift();
+
+    let opponentIndex = remaining.findIndex((p) => !white.opponents.has(Number(p.id)));
+    if (opponentIndex === -1) opponentIndex = 0;
+
+    const black = remaining.splice(opponentIndex, 1)[0];
+    pairings.push({ white, black, bye: false });
+  }
+
+  return pairings;
+}
+
+
+const competitions = await getCompetitionSummaries();
+
+
+app.post("/competitions/:id/next-round", async (req, res) => {
+  const competitionId = req.params.id;
+
+  const competition = await one(
+    `SELECT * FROM competitions WHERE id = ? LIMIT 1`,
+    [competitionId]
+  );
+
+  if (!competition) {
+    return res.redirect("/coach?message=Competition not found");
+  }
+
+  const latest = await one(
+    `SELECT COALESCE(MAX(round_number), 0) AS latest_round FROM matches WHERE competition_id = ?`,
+    [competitionId]
+  );
+
+  const latestRound = Number(latest?.latest_round || 0);
+
+  if (latestRound === 0) {
+    return res.redirect("/coach?message=Create Round 1 first");
+  }
+
+  const pending = await one(
+    `SELECT COUNT(*) AS count FROM matches WHERE competition_id = ? AND round_number = ? AND result = 'pending'`,
+    [competitionId, latestRound]
+  );
+
+  if (Number(pending?.count || 0) > 0) {
+    return res.redirect(`/coach?message=Finish all Round ${latestRound} results before generating the next round`);
+  }
+
+  const alreadyNext = await one(
+    `SELECT COUNT(*) AS count FROM matches WHERE competition_id = ? AND round_number = ?`,
+    [competitionId, latestRound + 1]
+  );
+
+  if (Number(alreadyNext?.count || 0) > 0) {
+    return res.redirect(`/coach?message=Round ${latestRound + 1} already exists`);
+  }
+
+  const players = await getCompetitionScores(competitionId);
+
+  if (players.length < 2) {
+    return res.redirect("/coach?message=Not enough players to generate next round");
+  }
+
+  const pairings = buildSwissPairings(players);
+
+  let boardNumber = 1;
+
+  for (const pairing of pairings) {
+    await run(
+      `INSERT INTO matches
+        (competition_id, round_number, board_number, white_player_id, black_player_id, result, featured)
+       VALUES (?, ?, ?, ?, ?, ?, 0)`,
+      [
+        competitionId,
+        latestRound + 1,
+        boardNumber,
+        pairing.white?.id || null,
+        pairing.black?.id || null,
+        pairing.bye ? "white_win" : "pending"
+      ]
+    );
+
+    boardNumber++;
+  }
+
+  res.redirect(`/coach?message=Round ${latestRound + 1} generated`);
+});
+
 
 /* -----------------------------
    404

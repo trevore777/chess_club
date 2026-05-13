@@ -42,24 +42,27 @@
     </div>
 
     <aside class="move-panel">
-      <h2>Move History</h2>
-      <% if (!moves || !moves.length) { %>
-        <p class="small-muted">No moves recorded yet.</p>
-      <% } else { %>
-        <ol class="move-list">
-          <% moves.forEach(m => { %>
-            <li><strong><%= m.move_number %>.</strong> <%= m.piece %> <%= m.from_square %> → <%= m.to_square %></li>
-          <% }) %>
-        </ol>
+  <h2>Move History</h2>
 
-        <div class="replay-controls">
-  <button type="button" data-start>Start</button>
-  <button type="button" data-prev>Previous</button>
-  <button type="button" data-next>Next</button>
-  <button type="button" data-latest>Latest</button>
-</div>
-      <% } %>
-    </aside>
+  <% if (!moves || !moves.length) { %>
+    <p class="small-muted">No moves recorded yet.</p>
+  <% } else { %>
+    <ol class="move-list">
+      <% moves.forEach(m => { %>
+        <li data-fen-after="<%= m.fen_after %>">
+          <%= m.piece %> <%= m.from_square %> → <%= m.to_square %>
+        </li>
+      <% }) %>
+    </ol>
+
+    <div class="replay-controls">
+      <button type="button" data-start>Start</button>
+      <button type="button" data-prev>Previous</button>
+      <button type="button" data-next>Next</button>
+      <button type="button" data-latest>Latest</button>
+    </div>
+  <% } %>
+</aside>
   </section>
 </main>
 <script src="/js/replay.js"></script>
